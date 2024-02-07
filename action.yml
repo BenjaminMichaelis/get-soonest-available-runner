@@ -1,19 +1,22 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
-
-# Define your inputs here.
+name: 'Check Runner Availability'
+description: 'Check for availability of self-hosted GitHub runners and fallback to GitHub-hosted runners if needed'
+author: '@BenjaminMichaelis'
+branding:
+  icon: activity
+  color: blue
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  github-token:
+    description: 'GitHub token with repo and actions scope for querying runner information'
     required: true
-    default: '1000'
-
-# Define your outputs here.
+  primary-runner:
+    description: 'Comma-separated list of labels for the primary runner, e.g. self-hosted,linux'
+    required: true
+  fallback-runner:
+    description: 'Name or labels of the fallback runner, e.g. ubuntu-latest'
+    required: true
 outputs:
-  time:
-    description: 'Your output description here'
-
+  use-runner:
+    description: 'The runner to use, either the primary or the fallback runner, based on availability'
 runs:
-  using: node20
-  main: dist/index.js
+  using: 'node16'
+  main: 'dist/index.js'
