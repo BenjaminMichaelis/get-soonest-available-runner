@@ -1,96 +1,69 @@
-/**
- * Unit tests for the action's main functionality, src/main.js
- */
-const core = require('@actions/core')
-const main = require('../src/main')
+const { checkRunner } = require('../src/main')
+const mockGetJson = jest.fn()
 
-// Mock the GitHub Actions core library
-const debugMock = jest.spyOn(core, 'debug').mockImplementation()
-const getInputMock = jest.spyOn(core, 'getInput').mockImplementation()
-const setFailedMock = jest.spyOn(core, 'setFailed').mockImplementation()
-const setOutputMock = jest.spyOn(core, 'setOutput').mockImplementation()
+jest.mock('@actions/http-client', () => {
+  return {
+    HttpClient: jest.fn().mockImplementation(() => {
+      return {
+        getJson: mockGetJson
+      }
+    }),
+    BearerCredentialHandler: jest.fn()
+  }
+})
 
-// Mock the action's main function
-const runMock = jest.spyOn(main, 'run')
-
-// Other utilities
-const timeRegex = /^\d{2}:\d{2}:\d{2}/
-
-describe('action', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it('sets the time output', async () => {
-    // Set the action's inputs as return values from core.getInput()
-    getInputMock.mockImplementation(name => {
-      switch (name) {
-        case 'milliseconds':
-          return '500'
-        default:
-          return ''
+describe('checkRunner', () => {
+  it('should use the primary runner if it is online', async () => {
+    mockGetJson.mockResolvedValue({
+      statusCode: 200,
+      result: {
+        runners: [
+          {
+            status: 'online',
+            labels: [{ name: 'self-hosted' }, { name: 'linux' }]
+          }
+        ]
       }
     })
 
-    await main.run()
-    expect(runMock).toHaveReturned()
+    const result = await checkRunner({
+      token: 'fake-token',
+      owner: 'fake-owner',
+      repo: 'fake-repo',
+      primaryRunnerLabels: ['self-hosted', 'linux'],
+      fallbackRunner: 'ubuntu-latest'
+    })
 
-    // Verify that all of the core library functions were called correctly
-    expect(debugMock).toHaveBeenNthCalledWith(1, 'Waiting 500 milliseconds ...')
-    expect(debugMock).toHaveBeenNthCalledWith(
-      2,
-      expect.stringMatching(timeRegex)
-    )
-    expect(debugMock).toHaveBeenNthCalledWith(
-      3,
-      expect.stringMatching(timeRegex)
-    )
-    expect(setOutputMock).toHaveBeenNthCalledWith(
-      1,
-      'time',
-      expect.stringMatching(timeRegex)
-    )
+    expect(result).toEqual({
+      useRunner: '["self-hosted","linux"]',
+      primaryIsOnline: true
+    })
   })
 
-  it('sets a failed status', async () => {
-    // Set the action's inputs as return values from core.getInput()
-    getInputMock.mockImplementation(name => {
-      switch (name) {
-        case 'milliseconds':
-          return 'this is not a number'
-        default:
-          return ''
+  it('should use the fallback runner if the primary is not online', async () => {
+    mockGetJson.mockResolvedValue({
+      statusCode: 200,
+      result: {
+        runners: [
+          {
+            status: 'offline',
+            labels: [{ name: 'self-hosted' }, { name: 'linux' }]
+          }
+        ]
       }
     })
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-
-    // Verify that all of the core library functions were called correctly
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds not a number'
-    )
-  })
-
-  it('fails if no input is provided', async () => {
-    // Set the action's inputs as return values from core.getInput()
-    getInputMock.mockImplementation(name => {
-      switch (name) {
-        case 'milliseconds':
-          throw new Error('Input required and not supplied: milliseconds')
-        default:
-          return ''
-      }
+    const result = await checkRunner({
+      token: 'fake-token',
+      owner: 'fake-owner',
+      repo: 'fake-repo',
+      primaryRunnerLabels: ['self-hosted', 'linux'],
+      fallbackRunner: 'ubuntu-latest'
     })
 
-    await main.run()
-    expect(runMock).toHaveReturned()
-
-    // Verify that all of the core library functions were called correctly
-    expect(setFailedMock).toHaveBeenNthCalledWith(
-      1,
-      'Input required and not supplied: milliseconds'
-    )
+    expect(result).toEqual({
+      useRunner: '["ubuntu-latest"]',
+      primaryIsOnline: false
+    })
   })
 })

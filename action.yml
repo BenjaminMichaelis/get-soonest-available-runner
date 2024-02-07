@@ -1,4 +1,4 @@
-name: 'Check Runner Availability'
+name: 'Get Soonest Available Runner'
 description: 'Check for availability of self-hosted GitHub runners and fallback to GitHub-hosted runners if needed'
 author: '@BenjaminMichaelis'
 branding:
