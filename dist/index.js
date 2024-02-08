@@ -2728,48 +2728,11 @@ exports["default"] = _default;
 const core = __nccwpck_require__(186)
 const httpClient = __nccwpck_require__(255)
 
-async function checkRunner({
-  token,
-  owner,
-  repo,
-  primaryRunnerLabels,
-  fallbackRunner
-}) {
-  const http = new httpClient.HttpClient('http-client')
-  const headers = {
-    Authorization: `Bearer ${token}`
-  }
-  const response = await http.getJson(
-    `https://api.github.com/repos/${owner}/${repo}/actions/runners`,
-    headers
-  )
-
-  if (response.statusCode !== 200) {
-    return {
-      error: `Failed to get runners. Status code: ${response.statusCode}`
-    }
-  }
-
-  const runners = response.result.runners || []
-  let useRunner = fallbackRunner
-  let primaryIsOnline = false
-
-  for (const runner of runners) {
-    if (runner.status === 'idle') {
-      const runnerLabels = runner.labels.map(label => label.name)
-      if (primaryRunnerLabels.every(label => runnerLabels.includes(label))) {
-        primaryIsOnline = true
-        useRunner = primaryRunnerLabels.join(',')
-        break
-      }
-    }
-  }
-
-  // return a JSON string so that it can be parsed using `fromJson`, e.g. fromJson('["self-hosted", "linux"]')
-  return { useRunner: JSON.stringify(useRunner.split(',')), primaryIsOnline }
-}
-
-async function main() {
+/**
+ * The main function for the action.
+ * @returns {Promise<void>} Resolves when the action is complete.
+ */
+async function run() {
   const githubRepository = process.env.GITHUB_REPOSITORY
   const [owner, repo] = githubRepository.split('/')
 
@@ -2800,9 +2763,52 @@ async function main() {
   }
 }
 
-module.exports = { checkRunner }
+async function checkRunner({
+  token,
+  owner,
+  repo,
+  primaryRunnerLabels,
+  fallbackRunner
+}) {
+  const http = new httpClient.HttpClient('http-client')
+  const headers = {
+    Authorization: `Bearer ${token}`
+  }
+  const response = await http.getJson(
+    `https://api.github.com/repos/${owner}/${repo}/actions/runners`,
+    headers
+  )
 
-if (false) {}
+  if (response.statusCode !== 200) {
+    return {
+      error: `Failed to get runners. Status code: ${response.statusCode}`
+    }
+  }
+
+  const runners = response.result.runners || []
+  let useRunner = fallbackRunner
+  let primaryIsOnline = false
+
+  for (const runner of runners) {
+    if (runner.status === 'idle') {
+      if (runner.busy === false) {
+        const runnerLabels = runner.labels.map(label => label.name)
+        if (primaryRunnerLabels.every(label => runnerLabels.includes(label))) {
+          primaryIsOnline = true
+          useRunner = primaryRunnerLabels.join(',')
+          break
+        }
+      }
+    }
+  }
+
+  // return a JSON string so that it can be parsed using `fromJson`, e.g. fromJson('["self-hosted", "linux"]')
+  return { useRunner: JSON.stringify(useRunner.split(',')), primaryIsOnline }
+}
+
+module.exports = {
+  run
+}
 
 
 /***/ }),
