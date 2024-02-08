@@ -1,6 +1,41 @@
 const core = require('@actions/core')
 const httpClient = require('@actions/http-client')
 
+/**
+ * The main function for the action.
+ * @returns {Promise<void>} Resolves when the action is complete.
+ */
+async function run() {
+  const githubRepository = process.env.GITHUB_REPOSITORY
+  const [owner, repo] = githubRepository.split('/')
+
+  try {
+    const inputs = {
+      owner,
+      repo,
+      token: core.getInput('github-token', { required: true }),
+      primaryRunnerLabels: core
+        .getInput('primary-runner', { required: true })
+        .split(','),
+      fallbackRunner: core.getInput('fallback-runner', { required: true })
+    }
+
+    const { useRunner, primaryIsOnline, error } = await checkRunner(inputs)
+
+    if (error) {
+      core.setFailed(error)
+      return
+    }
+
+    core.info(`Primary runner is online: ${primaryIsOnline}`)
+    core.info(`Using runner: ${useRunner}`)
+
+    core.setOutput('use-runner', useRunner)
+  } catch (error) {
+    core.setFailed(error.message)
+  }
+}
+
 async function checkRunner({
   token,
   owner,
@@ -44,39 +79,6 @@ async function checkRunner({
   return { useRunner: JSON.stringify(useRunner.split(',')), primaryIsOnline }
 }
 
-async function main() {
-  const githubRepository = process.env.GITHUB_REPOSITORY
-  const [owner, repo] = githubRepository.split('/')
-
-  try {
-    const inputs = {
-      owner,
-      repo,
-      token: core.getInput('github-token', { required: true }),
-      primaryRunnerLabels: core
-        .getInput('primary-runner', { required: true })
-        .split(','),
-      fallbackRunner: core.getInput('fallback-runner', { required: true })
-    }
-
-    const { useRunner, primaryIsOnline, error } = await checkRunner(inputs)
-
-    if (error) {
-      core.setFailed(error)
-      return
-    }
-
-    core.info(`Primary runner is online: ${primaryIsOnline}`)
-    core.info(`Using runner: ${useRunner}`)
-
-    core.setOutput('use-runner', useRunner)
-  } catch (error) {
-    core.setFailed(error.message)
-  }
-}
-
-module.exports = { checkRunner }
-
-if (require.main === module) {
-  main()
+module.exports = {
+  run
 }
