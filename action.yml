@@ -17,7 +17,7 @@ inputs:
     required: true
 
 outputs:
-  use-runner:
+  runner:
     description: "The runner to be used for subsequent jobs."
 
 runs:
@@ -38,9 +38,9 @@ runs:
 
         # Check if the response is not null before setting the output
         if [ -n "$response" ]; then
-          echo "::set-output name=runner::${{ inputs.primary_runner }}"
+          echo "runner=${{ inputs.primary_runner }}" >> $GITHUB_OUTPUT
         else
-          echo "::set-output name=runner::${{ inputs.fallback_runner }}"
+          echo "runner=${{ inputs.fallback_runner }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
       env:
