@@ -1,19 +1,41 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: "Determine Runner for Jobs"
+description: "Checks the status of self-hosted runners and selects a runner based on availability."
+author: "@BenjaminMichaelis"
+branding:
+  icon: "check-circle"
+  color: "green"
 
-# Define your inputs here.
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  primary_runner:
+    description: "The labels of the self-hosted runner."
     required: true
-    default: '1000'
+  fallback_runner:
+    description: "The runner to use if the primary runner is not available."
+    required: true
+  github_token:
+    description: "The GitHub token."
+    required: true
 
-# Define your outputs here.
 outputs:
-  time:
-    description: 'Your output description here'
+  use-runner:
+    description: "The runner to be used for subsequent jobs."
 
 runs:
-  using: node20
-  main: dist/index.js
+  using: "composite"
+  steps:
+    - run: |
+        # Fetch the list of repository runners
+        response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository }}/actions/runners)
+
+        # Parse the response to check if a self-hosted runner is online and idle
+        echo "$response" | jq -r '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )'
+      shell: bash
+    - run: |
+        if [ -n "${{ steps.check_runners.outputs.result }}" ]; then
+          echo "::set-output name=runner::${{ inputs.primary_runner }}"
+        else
+          echo "::set-output name=runner::${{ inputs.fallback_runner }}"
+        fi
+      shell: bash
