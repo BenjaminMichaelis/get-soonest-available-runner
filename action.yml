@@ -24,6 +24,9 @@ runs:
   using: 'composite'
   steps:
     - run: |
+        # Extract the organization name
+        org=${{ github.repository%%/* }}
+
         # Fetch the list of repository runners
         response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
           -H "Accept: application/vnd.github.v3+json" \
@@ -33,11 +36,15 @@ runs:
         if [ -z "$response" ]; then
           response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/orgs/{org}/actions/runners)
+            https://api.github.com/orgs/$org/actions/runners)
         fi
 
-        # Parse the response to check if a self-hosted runner is online and idle
-        echo "$response" | jq -r '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )'
+        # Check if the response is not null before parsing it with jq
+        if [ "$response" != "null" ]; then
+          echo "$response" | jq -r '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )'
+        else
+          echo "No runners available"
+        fi
       shell: bash
     - run: |
         if [ -n "${{ steps.check_runners.outputs.result }}" ]; then
