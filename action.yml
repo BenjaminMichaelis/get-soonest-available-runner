@@ -29,18 +29,18 @@ runs:
         org=${org%%/*}
 
         # Fetch the list of repository runners
-        response=$(gh api repos/${{ github.repository }}/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )')
+        response=$(gh api repos/${{ github.repository }}/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary-runner }}")) )')
 
         # If no runners are returned for the repository, check at the organization level
         if [ -z "$response" ]; then
-          response=$(gh api orgs/$org/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )')
+          response=$(gh api orgs/$org/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary-runner }}")) )')
         fi
 
         # Check if the response is not null before setting the output
         if [ -n "$response" ]; then
-          echo "runner=${{ inputs.primary_runner }}" >> $GITHUB_OUTPUT
+          echo "runner=${{ inputs.primary-runner }}" >> $GITHUB_OUTPUT
         else
-          echo "runner=${{ inputs.fallback_runner }}" >> $GITHUB_OUTPUT
+          echo "runner=${{ inputs.fallback-runner }}" >> $GITHUB_OUTPUT
         fi
       shell: bash
       env:
