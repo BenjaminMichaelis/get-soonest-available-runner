@@ -25,7 +25,8 @@ runs:
   steps:
     - run: |
         # Extract the organization name
-        org=${{ github.repository%%/* }}
+        org=${{ github.repository }}
+        org=${org%%/*}
 
         # Fetch the list of repository runners
         response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
