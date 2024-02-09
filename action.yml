@@ -6,13 +6,13 @@ branding:
   color: "green"
 
 inputs:
-  primary_runner:
+  primary-runner:
     description: "The labels of the self-hosted runner."
     required: true
-  fallback_runner:
+  fallback-runner:
     description: "The runner to use if the primary runner is not available."
     required: true
-  github_token:
+  github-token:
     description: "The GitHub token."
     required: true
 
@@ -21,13 +21,20 @@ outputs:
     description: "The runner to be used for subsequent jobs."
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - run: |
         # Fetch the list of repository runners
         response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/${{ github.repository }}/actions/runners)
+
+        # If no runners are returned for the repository, check at the organization level
+        if [ -z "$response" ]; then
+          response=$(curl -H "Authorization: token ${{ inputs.github_token }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/orgs/{org}/actions/runners)
+        fi
 
         # Parse the response to check if a self-hosted runner is online and idle
         echo "$response" | jq -r '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary_runner }}")) )'
