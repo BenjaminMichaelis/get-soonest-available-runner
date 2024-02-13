@@ -7,41 +7,72 @@ branding:
 
 inputs:
   primary-runner:
-    description: "The labels of the self-hosted runner."
+    description: 'The labels of the self-hosted runner.'
     required: true
   fallback-runner:
-    description: "The runner to use if the primary runner is not available."
+    description: 'The runner to use if the primary runner is not available.'
     required: true
   github-token:
-    description: "The GitHub token."
+    description: 'The GitHub token.'
     required: true
 
 outputs:
   runner:
     description: "The runner to be used for subsequent jobs."
+    value: ${{ steps.check-runners.outputs.runner }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
-    - run: |
-        # Extract the organization name
-        org=${{ github.repository }}
-        org=${org%%/*}
+    - name: Check runners
+      id: check-runners
+      run: |
+        # Define a function to check the runners
+        function CheckRunners($jsonResponse) {
+            # Convert the JSON response to a PowerShell object
+            $object = $jsonResponse | ConvertFrom-Json
 
-        # Fetch the list of repository runners
-        response=$(gh api repos/${{ github.repository }}/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary-runner }}")) )')
+            # Check if there is at least one item with a status of "online" and busy of false
+            $onlineAndNotBusy = $object.runners | Where-Object { $_.status -eq "online" -and $_.busy -eq $false }
 
-        # If no runners are returned for the repository, check at the organization level
-        if [ -z "$response" ]; then
-          response=$(gh api orgs/$org/actions/runners --jq '.runners[] | select(.status=="online" and .busy==false and (.labels[].name | contains("${{ inputs.primary-runner }}")) )')
-        fi
+            # Return true if there is at least one item with a status of "online" and busy of false
+            if ($onlineAndNotBusy) {
+                return $true
+            } else {
+                return $false
+            }
+        }
 
-        # Check if the response is not null before setting the output
-        if [ -n "$response" ]; then
-          echo "runner=${{ inputs.primary-runner }}" >> $GITHUB_OUTPUT
-        else
-          echo "runner=${{ inputs.fallback-runner }}" >> $GITHUB_OUTPUT
-        fi
-      shell: bash
+        # Get the JSON response from the API for the specific repository
+        $jsonResponseRepo = gh api /repos/${{ github.repository }}/actions/runners -H "Authorization: Bearer ${{ env.GH_TOKEN }}" | Out-String
+        Write-Host "Repository Runners API Response: $jsonResponseRepo"
+
+        # Check the runners for the specific repository
+        $repoRunnersOnlineAndNotBusy = CheckRunners $jsonResponseRepo
+        Write-Host "Repository Runners Online and Not Busy: $repoRunnersOnlineAndNotBusy"
+
+        if ($repoRunnersOnlineAndNotBusy) {
+            # If there are online and not busy runners for the specific repository, return true
+            Write-Output "runner=${{ inputs.primary-runner }}"
+            Write-Output "runner=${{ inputs.primary-runner }}" >> $env:GITHUB_OUTPUT
+        } else {
+            # If there are no online and not busy runners for the specific repository, check the runners at the organization level
+            $jsonResponseOrg = gh api /orgs/${{ github.repository_owner }}/actions/runners -H "Authorization: Bearer ${{ env.GH_TOKEN }}" | Out-String
+            Write-Host "Organization Runners API Response: $jsonResponseOrg"
+            $orgRunnersOnlineAndNotBusy = CheckRunners $jsonResponseOrg
+            Write-Host "Organization Runners Online and Not Busy: $orgRunnersOnlineAndNotBusy"
+
+            # Return the result of checking the runners at the organization level
+            if ($orgRunnersOnlineAndNotBusy) {
+                Write-Output "runner=${{ inputs.primary-runner }}"
+                Write-Output "runner=${{ inputs.primary-runner }}" >> $env:GITHUB_OUTPUT
+            } else {
+                Write-Output "runner=${{ inputs.fallback-runner }}"
+                Write-Output "runner=${{ inputs.fallback-runner }}" >> $env:GITHUB_OUTPUT
+            }
+        }
+      shell: pwsh
       env:
+        primary-runner: ${{ inputs.primary-runner }}
+        fallback-runner: ${{ inputs.fallback-runner }}
         GH_TOKEN: ${{ inputs.github-token }}
