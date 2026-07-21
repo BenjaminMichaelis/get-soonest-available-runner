@@ -35,12 +35,20 @@ runs:
       id: check-runners
       run: |
         # Define a function to check the runners
-        function CheckRunners($jsonResponse, $minAvailableRunners) {
+        function GetRunnerLabels($runnerValue) {
+            return $runnerValue -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        }
+
+        function CheckRunners($jsonResponse, $minAvailableRunners, $requiredLabels) {
             # Convert the JSON response to a PowerShell object
             $object = $jsonResponse | ConvertFrom-Json
 
             # Check if there are at least $minAvailableRunners items with a status of "online" and busy of false
-            $onlineAndNotBusy = $object.runners | Where-Object { $_.status -eq "online" -and $_.busy -eq $false }
+            $onlineAndNotBusy = $object.runners | Where-Object {
+                $runnerLabelNames = @($_.labels | ForEach-Object { $_.name })
+                $missingLabels = $requiredLabels | Where-Object { $runnerLabelNames -notcontains $_ }
+                $_.status -eq "online" -and $_.busy -eq $false -and $missingLabels.Count -eq 0
+            }
 
             # Return true if there are at least $minAvailableRunners items with a status of "online" and busy of false
             if ($onlineAndNotBusy.Count -ge $minAvailableRunners) {
@@ -51,16 +59,18 @@ runs:
         }
 
         function ConvertRunnerToJsonArray($runnerValue) {
-            $labels = $runnerValue -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+            $labels = GetRunnerLabels $runnerValue
             return ($labels | ConvertTo-Json -Compress)
         }
+
+        $primaryRunnerLabels = GetRunnerLabels "${{ inputs.primary-runner }}"
 
         # Get the JSON response from the API for the specific repository
         $jsonResponseRepo = gh api /repos/${{ github.repository }}/actions/runners -H "Authorization: Bearer ${{ env.GH_TOKEN }}" | Out-String
         Write-Host "Repository Runners API Response: $jsonResponseRepo"
 
         # Check the runners for the specific repository
-        $repoRunnersOnlineAndNotBusy = CheckRunners $jsonResponseRepo ${{ env.MIN_AVAILABLE_RUNNERS }}
+        $repoRunnersOnlineAndNotBusy = CheckRunners $jsonResponseRepo ${{ env.MIN_AVAILABLE_RUNNERS }} $primaryRunnerLabels
         Write-Host "Repository Runners Online and Not Busy: $repoRunnersOnlineAndNotBusy"
 
         if ($repoRunnersOnlineAndNotBusy) {
@@ -74,7 +84,7 @@ runs:
             # If there are no online and not busy runners for the specific repository, check the runners at the organization level
             $jsonResponseOrg = gh api /orgs/${{ github.repository_owner }}/actions/runners -H "Authorization: Bearer ${{ env.GH_TOKEN }}" | Out-String
             Write-Host "Organization Runners API Response: $jsonResponseOrg"
-            $orgRunnersOnlineAndNotBusy = CheckRunners $jsonResponseOrg ${{ env.MIN_AVAILABLE_RUNNERS }}
+            $orgRunnersOnlineAndNotBusy = CheckRunners $jsonResponseOrg ${{ env.MIN_AVAILABLE_RUNNERS }} $primaryRunnerLabels
             Write-Host "Organization Runners Online and Not Busy: $orgRunnersOnlineAndNotBusy"
 
             # Return the result of checking the runners at the organization level

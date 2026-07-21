@@ -19,6 +19,7 @@ determine-runner-integration:
         primary-runner: "self-hosted,Linux"
         fallback-runner: "ubuntu-latest"
         # This correlates to the number of free runners that must exist when the API queries.
+        # Only runners matching all labels from primary-runner are counted.
         # Increasing this can help in case you have lots of actions querying at the same time for a race condition between the time you query the runner and when the runner actually takes the job it will execute.
         min-available-runners: 2
         github-token: ${{ secrets.GHTOKEN_DETERMINERUNNER }} # This token must have permissions to query the runner from your repo or organization (whichever you are looking for)
